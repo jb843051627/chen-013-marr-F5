@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('婚姻登记记录证明逐级核准台账')"/>
+</head>
+<body class="pear-container">
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">核准单号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="billNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">申请人</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="applicantName" class="layui-input">
+                </div>
+                <label class="layui-form-label">压在第几格</label>
+                <div class="layui-input-inline">
+                    <select name="nodeNo">
+                        <option value="">全部</option>
+                        <option value="0">受理岗</option>
+                        <option value="1">档案核对岗</option>
+                        <option value="2">分管双签</option>
+                        <option value="3">市局备案</option>
+                        <option value="4">已挪满落定</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="cert-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i> 重置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="cert-table" lay-filter="cert-table"></table>
+    </div>
+</div>
+</body>
+
+<script type="text/html" id="cert-toolbar">
+    <button shiro:hasPermission="marr:marrCertBill:accept" class="pear-btn pear-btn-primary pear-btn-md" lay-event="apply">
+        <i class="layui-icon layui-icon-add-1"></i>
+        查档申请受理（沿用现行查档申请表）
+    </button>
+</script>
+
+<script type="text/html" id="cert-bar">
+    <button shiro:hasPermission="marr:marrCertBill:view" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="detail" title="办理/查看">
+        <i class="layui-icon layui-icon-edit"></i>
+    </button>
+</script>
+
+<script type="text/html" id="cert-node">
+    {{#  var names=['受理岗','档案核对岗','分管双签','市局备案','已挪满落定']; }}
+    {{#  if(d.nodeNo<=3){ }}
+    <span class="layui-badge layui-bg-blue">{{ names[d.nodeNo] }}</span>
+    <span class="layui-badge-rim">已落 {{ d.signCount }}/{{ d.needCount }} 手（系统按签账算出）</span>
+    {{#  }else{ }}
+    <span class="layui-badge layui-bg-green">{{ names[d.nodeNo] }}</span>
+    {{#  } }}
+</script>
+
+<script type="text/html" id="cert-status">
+    {{#  if(d.status==3){ }}
+    <span class="layui-badge">不予出具·定格封栏</span>
+    {{#  }else if(d.nodeNo==4){ }}
+    {{#  if(d.issueFlag==1){ }}<span class="layui-badge layui-bg-orange">已出手·倒序复核剩 {{ d.reviewLevel }} 格</span>{{#  }else{ }}<span class="layui-badge layui-bg-green">已核讫待出证</span>{{#  } }}
+    {{#  }else{ }}
+    <span class="layui-badge layui-bg-blue">在核·第 {{ d.reviewRound }} 轮</span>
+    {{#  } }}
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery'], function () {
+        let table = layui.table;
+        let form = layui.form;
+        let $ = layui.jquery;
+        let MODULE_PATH = rootPath + "/marrCertBill/";
+        let cols = [[
+            {title: 'ID', field: 'id', align: 'center', hide: true},
+            {title: '核准单号', field: 'billNo', align: 'center', width: 170},
+            {title: '申请人', field: 'applicantName', align: 'center', width: 110},
+            {title: '卷宗字号', field: 'volumeNo', align: 'center', width: 110},
+            {title: '事由', field: 'reasonCode', align: 'center', width: 90},
+            {title: '当前压在第几格', field: 'nodeNo', align: 'center', width: 260, toolbar: '#cert-node'},
+            {title: '情形', field: 'status', align: 'center', width: 190, toolbar: '#cert-status'},
+            {title: '受理时间', field: 'createTime', align: 'center', width: 170},
+            {title: '操作', toolbar: '#cert-bar', align: 'center', width: 100}
+        ]];
+
+        table.render({
+            elem: '#cert-table',
+            url: MODULE_PATH + 'list',
+            page: true,
+            method: 'get',
+            cols: cols,
+            skin: 'line',
+            toolbar: '#cert-toolbar',
+            defaultToolbar: [{'layEvent': 'refresh', 'icon': 'layui-icon-refresh'}, 'filter', 'print', 'exports'],
+            where: {orderByColumn: "create_time", isAsc: "desc"}
+        });
+
+        table.on('tool(cert-table)', function (obj) {
+            if (obj.event === 'detail') {
+                layer.open({
+                    type: 2, title: '核准单办理屏 ' + obj.data['billNo'], shade: 0.1,
+                    area: ['1080px', '680px'],
+                    content: MODULE_PATH + 'detail/' + obj.data['id']
+                });
+            }
+        });
+
+        table.on('toolbar(cert-table)', function (obj) {
+            if (obj.event === 'apply') {
+                layer.open({
+                    type: 2, title: '查档申请表（受理进单）', shade: 0.1,
+                    area: ['720px', '640px'],
+                    content: MODULE_PATH + 'apply'
+                });
+            } else if (obj.event === 'refresh') {
+                table.reload('cert-table');
+            }
+        });
+
+        form.on('submit(cert-query)', function (data) {
+            table.reload('cert-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+    });
+</script>
+</html>

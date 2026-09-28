@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:include="include :: header('核准单办理屏')"/>
+</head>
+<body class="pear-container" style="padding: 12px;">
+<div class="layui-card">
+    <div class="layui-card-header">核准单 <span id="billNo"></span>
+        <span class="layui-badge-rim">第 <span id="round"></span> 轮</span>
+        <span class="layui-badge-rim">当前登录人：<b id="loginName" th:text="${loginName}"></b></span>
+    </div>
+    <div class="layui-card-body">
+        <table class="layui-table" style="margin: 0;">
+            <tr>
+                <td style="width:110px;">申请人</td><td id="applicantName" style="width:200px;"></td>
+                <td style="width:110px;">证件号码</td><td id="applicantIdNo"></td>
+            </tr>
+            <tr>
+                <td>查档人身份</td><td id="applicantType"></td>
+                <td>查档凭证</td><td id="credentialNo"></td>
+            </tr>
+            <tr>
+                <td>来查哪一档</td><td id="queryTarget"></td>
+                <td>卷宗字号</td><td id="volumeNo"></td>
+            </tr>
+            <tr>
+                <td>出证事由</td><td id="reasonCode"></td>
+                <td>当前压在第几格</td>
+                <td><span id="nodeBadge" class="layui-badge layui-bg-blue"></span>
+                    <span class="layui-badge-rim">已落 <b id="signCount"></b>/<b id="needCount"></b> 手（由签账一笔笔算出，不容手填）</span>
+                </td>
+            </tr>
+            <tr>
+                <td>拟出文本</td><td colspan="3" id="draftText"></td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="layui-card" id="frozenCard" style="display:none;">
+    <div class="layui-card-body">
+        <span class="layui-badge">不予出具·定格封栏</span>
+        此件已定，事后谁也不能再补一枚；要改只能另起一份新件。
+    </div>
+</div>
+
+<div class="layui-card" id="actionCard" style="display:none;">
+    <div class="layui-card-header">本格办理（次序颠倒不得，前一格没到齐推不开这一格的门）</div>
+    <div class="layui-card-body">
+        <div class="layui-form-item">
+            <input type="text" id="comment" placeholder="签注（可空）" class="layui-input" style="width:420px; display:inline-block;">
+        </div>
+        <div class="layui-btn-container" id="actionBtns"></div>
+        <div class="layui-form-item" id="issueBox" style="display:none; margin-top:8px;">
+            <input type="text" id="certNo" placeholder="出证批准文号" class="layui-input" style="width:260px; display:inline-block;">
+            <button class="pear-btn pear-btn-primary pear-btn-md" id="btnIssue"><i class="layui-icon layui-icon-ok"></i> 结论转对外证明文本出手</button>
+            <span class="layui-badge-rim">姓名、档案字号、事由、批准文号同一单带出，不用第二个人再抄；同一申请人第二条重复抄发拦得住</span>
+        </div>
+    </div>
+</div>
+
+<div class="layui-card" id="reviewCard" style="display:none;">
+    <div class="layui-card-header">对外证明文本（已出手，逐级倒着复核）</div>
+    <div class="layui-card-body">
+        <pre id="certText" style="white-space: pre-wrap; background:#f8f8f8; padding:10px; border:1px solid #eee;"></pre>
+        <span class="layui-badge-rim">倒序复核剩余待复：<b id="reviewLevel"></b> 格（市局→双签→核对→受理）</span>
+        <button class="pear-btn pear-btn-warming pear-btn-md" id="btnReview" style="margin-left:10px;">
+            <i class="layui-icon layui-icon-ok"></i> 本格复核对得上号
+        </button>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-header">本格签账（当前轮；同一分钟两人各签也是两笔，绝不并笔）</div>
+    <div class="layui-card-body">
+        <table id="trail-table"></table>
+    </div>
+</div>
+<div class="layui-card">
+    <div class="layui-card-header">全轮留痕（含被市局抹平的旧轮名目；抹掉的与后落的不并排摆着）</div>
+    <div class="layui-card-body">
+        <table id="trail-all-table"></table>
+    </div>
+</div>
+
+<th:block th:include="include :: footer"/>
+<script th:inline="javascript">
+    let BILL_ID = [[${billId}]];
+</script>
+<script>
+    layui.use(['table', 'jquery'], function () {
+        let table = layui.table;
+        let $ = layui.jquery;
+        let MODULE_PATH = rootPath + "/marrCertBill/";
+        let NODE_NAMES = ['受理岗', '档案核对岗', '分管双签', '市局备案', '已挪满落定'];
+        let ROLE_NAMES = {SINGLE: '本岗单签', SCOPE: '事由合规核', TEXT: '记载文本核'};
+        let ACTION_NAMES = {1: '落印核准', 2: '不予出具', 3: '市局打回', 4: '倒序复核确认', 5: '证明文本出手'};
+        let TYPE_NAMES = {
+            '1': '本人', '2': '监护人', '3': '继承人', '4': '受托人', '5': '办案机关'
+        };
+        let REASON_NAMES = {TWN: '涉台公证事项', LST: '清单所列国家公证事项', JUD: '司法机关依法调查事项'};
+        let data = null;
+
+        let trailCols = [[
+            {title: '轮次', field: 'reviewRound', align: 'center', width: 70},
+            {title: '格次', templet: function (d) {return NODE_NAMES[d.nodeNo];}, align: 'center', width: 110},
+            {title: '名目', templet: function (d) {return ROLE_NAMES[d.signRole] || d.signRole;}, align: 'center', width: 120},
+            {title: '落印人', field: 'approver', align: 'center', width: 120},
+            {title: '动作', templet: function (d) {return ACTION_NAMES[d.action];}, align: 'center', width: 120},
+            {title: '签注', field: 'comment', align: 'left'},
+            {title: '时辰', field: 'createTime', align: 'center', width: 170}
+        ]];
+
+        function renderTrails() {
+            table.render({elem: '#trail-table', data: data.trail, cols: trailCols, skin: 'line'});
+            table.render({elem: '#trail-all-table', data: data.trailAll, cols: trailCols, skin: 'line'});
+        }
+
+        function currentRoundNodeApprovals(node) {
+            let me = $('#loginName').text();
+            return (data.trail || []).filter(function (s) {
+                return s.nodeNo === node && s.action === 1 && s.approver === me;
+            });
+        }
+
+        function renderActions() {
+            let b = data.bill;
+            $('#actionCard').hide();
+            $('#frozenCard').hide();
+            $('#reviewCard').hide();
+            $('#issueBox').hide();
+            $('#actionBtns').empty();
+
+            if (b.status === 3) {
+                $('#frozenCard').show();
+                return;
+            }
+            if (b.issueFlag === 1) {
+                $('#reviewCard').show();
+                $('#certText').text(b.certText);
+                $('#reviewLevel').text(b.reviewLevel);
+                // 只许该格原落印人本人倒着复核，与当日办理那一屏对得上号
+                let node = b.reviewLevel - 1;
+                let mine = node >= 0 ? currentRoundNodeApprovals(node) : [];
+                $('#btnReview').prop('disabled', mine.length === 0 || b.reviewLevel === 0);
+                return;
+            }
+            if (b.nodeNo === 4 && b.status === 1) {
+                $('#actionCard').show();
+                $('#issueBox').show();
+                return;
+            }
+
+            $('#actionCard').show();
+            let btn = function (text, cls, onclick) {
+                $('<button class="pear-btn ' + cls + ' pear-btn-md" style="margin-right:10px;"></button>')
+                        .text(text).click(onclick).appendTo('#actionBtns');
+            };
+            let post = function (url, extra, okMsg) {
+                let p = $.extend({id: BILL_ID, comment: $('#comment').val()}, extra || {});
+                let load = layer.load();
+                $.post(MODULE_PATH + url, p, function (res) {
+                    layer.close(load);
+                    layer.msg(res.msg, {icon: res.code === 200 ? 1 : 2, time: 1500}, function () {
+                        if (res.code === 200) { loadAll(); }
+                    });
+                }, 'json');
+            };
+            if (b.nodeNo === 1) {
+                btn('档案核对一致·落印', 'pear-btn-primary', function () {post('approve');});
+                btn('不予出具', 'pear-btn-danger', function () {post('reject');});
+            } else if (b.nodeNo === 2) {
+                btn('事由核：落在可出证范围（分管甲）', 'pear-btn-primary',
+                        function () {post('approveDouble', {signRole: 'SCOPE'});});
+                btn('记载文本核：记载与拟出文本合拢（分管乙）', 'pear-btn-primary',
+                        function () {post('approveDouble', {signRole: 'TEXT'});});
+                btn('事由核·不予出具', 'pear-btn-danger',
+                        function () {post('rejectDouble', {signRole: 'SCOPE'});});
+                btn('记载文本核·不予出具', 'pear-btn-danger',
+                        function () {post('rejectDouble', {signRole: 'TEXT'});});
+            } else if (b.nodeNo === 3) {
+                btn('市局备案落印（四格挪满）', 'pear-btn-primary', function () {post('approve');});
+                btn('拟出文本不合规范·打回处里（此前名目抹平，从第二格重攒）', 'pear-btn-warming',
+                        function () {post('rollback');});
+                btn('不予出具', 'pear-btn-danger', function () {post('reject');});
+            }
+        }
+
+        function fillBill() {
+            let b = data.bill;
+            $('#billNo').text(b.billNo);
+            $('#round').text(b.reviewRound);
+            $('#applicantName').text(b.applicantName);
+            $('#applicantIdNo').text(b.applicantIdNo);
+            $('#applicantType').text(TYPE_NAMES[b.applicantType] || b.applicantType);
+            $('#credentialNo').text(b.credentialNo);
+            $('#queryTarget').text(b.queryTarget);
+            $('#volumeNo').text(b.volumeNo);
+            $('#reasonCode').text(REASON_NAMES[b.reasonCode] || b.reasonCode);
+            $('#draftText').text(b.draftText);
+            $('#nodeBadge').text(NODE_NAMES[b.nodeNo]);
+            $('#signCount').text(b.signCount);
+            $('#needCount').text(b.needCount);
+        }
+
+        function loadAll() {
+            $.getJSON(MODULE_PATH + 'get/' + BILL_ID, function (res) {
+                if (res.code !== 200) { layer.msg(res.msg, {icon: 2}); return; }
+                data = res.data;
+                fillBill();
+                renderTrails();
+                renderActions();
+            });
+        }
+
+        $('#btnIssue').click(function () {
+            let certNo = $('#certNo').val();
+            if (!certNo) { layer.msg('批准文号不能为空', {icon: 2}); return; }
+            let load = layer.load();
+            $.post(MODULE_PATH + 'issue', {id: BILL_ID, certNo: certNo, comment: $('#comment').val()},
+                    function (res) {
+                        layer.close(load);
+                        layer.msg(res.msg, {icon: res.code === 200 ? 1 : 2, time: 1800}, function () {
+                            if (res.code === 200) { loadAll(); }
+                        });
+                    }, 'json');
+        });
+        $('#btnReview').click(function () {
+            let load = layer.load();
+            $.post(MODULE_PATH + 'review', {id: BILL_ID, comment: $('#comment').val()}, function (res) {
+                layer.close(load);
+                layer.msg(res.msg, {icon: res.code === 200 ? 1 : 2, time: 1500}, function () {
+                    if (res.code === 200) { loadAll(); }
+                });
+            }, 'json');
+        });
+
+        loadAll();
+    });
+</script>
+</body>
+</html>

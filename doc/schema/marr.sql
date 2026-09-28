@@ -5,19 +5,57 @@
 CREATE TABLE IF NOT EXISTS t_marr_cert_bill (
   id bigint NOT NULL COMMENT '主键',
   bill_no varchar(64) DEFAULT NULL COMMENT '婚姻登记记录证明核准单号',
-  node_no int DEFAULT NULL COMMENT '当前所在层 0..3',
-  sign_mode int DEFAULT NULL COMMENT '同层核准方式 0任一人 1两名点齐',
-  need_count int DEFAULT NULL COMMENT '本层应签人数',
-  sign_count int DEFAULT NULL COMMENT '本层已签人数',
-  status int DEFAULT NULL COMMENT '报批情形 0在核 1已核讫 2已打回',
+  node_no int DEFAULT NULL COMMENT '当前压在第几格 0受理 1核对 2分管双签 3市局备案 4已挪满落定',
+  sign_mode int DEFAULT NULL COMMENT '当前格核准方式 0任一人 1两名点齐',
+  need_count int DEFAULT NULL COMMENT '当前格应到名目数(由格次算出)',
+  sign_count int DEFAULT NULL COMMENT '当前格已落印笔数(由签账一笔笔算出,不容手填)',
+  status int DEFAULT NULL COMMENT '报批情形 0在核 1已核讫 2已打回 3不予出具',
+  applicant_name varchar(64) DEFAULT NULL COMMENT '申请人姓名',
+  applicant_id_no varchar(64) DEFAULT NULL COMMENT '申请人证件号码',
+  applicant_type varchar(8) DEFAULT NULL COMMENT '查档人身份类别 1本人 2监护人 3继承人 4受托人 5办案机关',
+  credential_no varchar(64) DEFAULT NULL COMMENT '按身份所持查档凭证编号',
+  query_target varchar(255) DEFAULT NULL COMMENT '查档指向(来查哪一档)',
+  volume_no varchar(64) DEFAULT NULL COMMENT '所挂卷宗字号(档案编号)',
+  reason_code varchar(8) DEFAULT NULL COMMENT '出证事由代码(须落在民政部通知可出证清单内)',
+  draft_text varchar(1000) DEFAULT NULL COMMENT '拟写入证明的文本表述',
+  review_round int DEFAULT '1' COMMENT '核准轮次(市局每打回一轮加一)',
+  freeze_node int DEFAULT NULL COMMENT '不予出具时定格的格次(定此后封栏)',
+  issue_flag int DEFAULT '0' COMMENT '出证标记 0未出手 1已出手',
+  cert_no varchar(64) DEFAULT NULL COMMENT '出证批准文号',
+  cert_text varchar(2000) DEFAULT NULL COMMENT '由核准单转出的对外证明文本',
+  issue_time datetime DEFAULT NULL COMMENT '证明文本出手之时',
+  review_level int DEFAULT '0' COMMENT '倒序复核剩余待复格数 4..0',
   del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
   create_by varchar(64) DEFAULT NULL COMMENT '创建者',
   create_time datetime DEFAULT NULL COMMENT '创建时间',
   update_by varchar(64) DEFAULT NULL COMMENT '更新者',
   update_time datetime DEFAULT NULL COMMENT '更新时间',
   remark varchar(500) DEFAULT NULL COMMENT '备注',
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  KEY idx_cert_bill_applicant (applicant_id_no, issue_flag),
+  KEY idx_cert_bill_node (node_no, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='婚姻登记记录证明逐级核准单';
+
+-- 逐级核准签账流水：同一格两人同分钟签完也各是一笔，绝不并笔；
+-- 市局打回只加一轮，旧轮账目保留，不与新轮并排。
+CREATE TABLE IF NOT EXISTS t_marr_cert_sign (
+  id bigint NOT NULL COMMENT '主键',
+  bill_id bigint NOT NULL COMMENT '核准单主键',
+  review_round int DEFAULT NULL COMMENT '落印时所属核准轮次',
+  node_no int DEFAULT NULL COMMENT '落在哪一格 0受理 1核对 2分管双签 3市局备案',
+  sign_role varchar(16) DEFAULT NULL COMMENT '格次内名目 SINGLE单签 SCOPE事由核 TEXT记载文本核',
+  approver varchar(64) DEFAULT NULL COMMENT '落印人(谁签记谁,不许代笔)',
+  action int DEFAULT NULL COMMENT '动作 1落印核准 2不予出具 3市局打回 4倒序复核确认 5出证',
+  comment varchar(500) DEFAULT NULL COMMENT '签注',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  KEY idx_cert_sign_bill (bill_id, review_round, node_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='逐级核准签账流水(逐笔留账)';
 
 CREATE TABLE IF NOT EXISTS t_marr_due_task (
   id bigint NOT NULL COMMENT '主键',
