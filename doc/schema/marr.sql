@@ -5,11 +5,19 @@
 CREATE TABLE IF NOT EXISTS t_marr_cert_bill (
   id bigint NOT NULL COMMENT '主键',
   bill_no varchar(64) DEFAULT NULL COMMENT '婚姻登记记录证明核准单号',
-  node_no int DEFAULT NULL COMMENT '当前所在层 0..3',
+  node_no int DEFAULT NULL COMMENT '当前所在层 0..3（按有效落印账算出，非手填）',
   sign_mode int DEFAULT NULL COMMENT '同层核准方式 0任一人 1两名点齐',
   need_count int DEFAULT NULL COMMENT '本层应签人数',
-  sign_count int DEFAULT NULL COMMENT '本层已签人数',
-  status int DEFAULT NULL COMMENT '报批情形 0在核 1已核讫 2已打回',
+  sign_count int DEFAULT NULL COMMENT '本层已签人数（与落印账同一回算出来的数）',
+  applicant_name varchar(64) DEFAULT NULL COMMENT '申请人姓名（受理四样之一）',
+  applicant_kind varchar(16) DEFAULT NULL COMMENT '申请人身份分类（本人/监护人/受托代理人/公检法等，各凭各证）',
+  credential_no varchar(64) DEFAULT NULL COMMENT '所持凭证字号（按身份分类对应凭证）',
+  site_no varchar(64) DEFAULT NULL COMMENT '挂查卷宗档案编号（核对只认此编号，姓名相像不作数）',
+  purpose varchar(64) DEFAULT NULL COMMENT '申请出证事由（须落在民政部通知可出证范围）',
+  draft_text varchar(1000) DEFAULT NULL COMMENT '拟写进证明的表述（受理四样之一）',
+  volume_no varchar(64) DEFAULT NULL COMMENT '挂查卷宗字号（受理四样之一）',
+  approve_no varchar(64) DEFAULT NULL COMMENT '市局备案批准文号（第四格落印时落定，印落封栏）',
+  status int DEFAULT NULL COMMENT '报批情形 0在核 1已核讫 2已打回 3不予出具（终局封死）',
   del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
   create_by varchar(64) DEFAULT NULL COMMENT '创建者',
   create_time datetime DEFAULT NULL COMMENT '创建时间',
@@ -18,6 +26,48 @@ CREATE TABLE IF NOT EXISTS t_marr_cert_bill (
   remark varchar(500) DEFAULT NULL COMMENT '备注',
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='婚姻登记记录证明逐级核准单';
+
+-- 逐级落印账：每落一枚一笔，同一分钟两人各签也只算两笔，绝不并成一笔。
+-- 回退（市局打回）把此前各格落过的名目尽数抹平：旧账逐笔置 void=1 原样留痕，
+-- 不与后落的并排摆作有效名目；重攒从第二格（核对）那一阶起。
+CREATE TABLE IF NOT EXISTS t_marr_cert_sign (
+  id bigint NOT NULL COMMENT '主键',
+  bill_id bigint NOT NULL COMMENT '所属核准单',
+  node_no int NOT NULL COMMENT '落印之格 0受理 1核对 2分管核准 3备案',
+  role_code varchar(32) DEFAULT NULL COMMENT '本笔名目：受理/核对/事由核准/内容核准/备案',
+  signer varchar(64) NOT NULL COMMENT '落印人本人登录名（代签一律当没签，不入此账）',
+  sign_comment varchar(500) DEFAULT NULL COMMENT '落印批注',
+  void_flag int NOT NULL DEFAULT '0' COMMENT '是否已抹平 0有效 1回退抹账（留痕，不再计入）',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '落印时辰',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  KEY idx_cert_sign_bill (bill_id, void_flag, node_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='核准单逐级落印流水账（一笔一名目）';
+
+-- 对外证明文本：四格挪满后由核准单结论直接转换带出，姓名/档案字号/事由/批准文号
+-- 同源于一张单子，不由第二名人员再抄。一位申请人只配一条文本。
+CREATE TABLE IF NOT EXISTS t_marr_cert_text (
+  id bigint NOT NULL COMMENT '主键',
+  bill_id bigint NOT NULL COMMENT '来源核准单',
+  bill_no varchar(64) DEFAULT NULL COMMENT '来源核准单号',
+  applicant_name varchar(64) NOT NULL COMMENT '申请人姓名（自核准单带出）',
+  site_no varchar(64) DEFAULT NULL COMMENT '档案字号（自核准单带出）',
+  purpose varchar(64) DEFAULT NULL COMMENT '出证事由（自核准单带出）',
+  approve_no varchar(64) DEFAULT NULL COMMENT '批准文号（自核准单带出）',
+  cert_text varchar(2000) DEFAULT NULL COMMENT '转换生成的对外证明文本',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '出手时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_cert_text_applicant (applicant_name, del_flag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='对外证明文本（一人一条，重复抄发拦截）';
 
 CREATE TABLE IF NOT EXISTS t_marr_due_task (
   id bigint NOT NULL COMMENT '主键',

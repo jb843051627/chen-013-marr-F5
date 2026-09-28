@@ -56,10 +56,50 @@ public class TMarrCertBill implements Serializable {
     @ApiModelProperty(value = "本层已签人数")
     private Integer signCount;
 
-    /** 报批情形 0在核 1已核讫 2已打回 */
+    /** 报批情形 0在核 1已核讫 2已打回 3不予出具（终局封死） */
     @TableField("status")
-    @ApiModelProperty(value = "报批情形 0在核 1已核讫 2已打回")
+    @ApiModelProperty(value = "报批情形 0在核 1已核讫 2已打回 3不予出具（终局封死）")
     private Integer status;
+
+    /** 申请人姓名（受理四样之一） */
+    @TableField("applicant_name")
+    @ApiModelProperty(value = "申请人姓名（受理四样之一）")
+    private String applicantName;
+
+    /** 申请人身份分类（本人/监护人/受托代理人/公检法等，各凭各证） */
+    @TableField("applicant_kind")
+    @ApiModelProperty(value = "申请人身份分类（本人/监护人/受托代理人/公检法等，各凭各证）")
+    private String applicantKind;
+
+    /** 所持凭证字号（按身份分类对应凭证） */
+    @TableField("credential_no")
+    @ApiModelProperty(value = "所持凭证字号（按身份分类对应凭证）")
+    private String credentialNo;
+
+    /** 挂查卷宗档案编号（核对只认此编号，姓名相像不作数） */
+    @TableField("site_no")
+    @ApiModelProperty(value = "挂查卷宗档案编号（核对只认此编号，姓名相像不作数）")
+    private String siteNo;
+
+    /** 申请出证事由（须落在民政部通知可出证范围） */
+    @TableField("purpose")
+    @ApiModelProperty(value = "申请出证事由（须落在民政部通知可出证范围）")
+    private String purpose;
+
+    /** 拟写进证明的表述（受理四样之一） */
+    @TableField("draft_text")
+    @ApiModelProperty(value = "拟写进证明的表述（受理四样之一）")
+    private String draftText;
+
+    /** 挂查卷宗字号（受理四样之一） */
+    @TableField("volume_no")
+    @ApiModelProperty(value = "挂查卷宗字号（受理四样之一）")
+    private String volumeNo;
+
+    /** 市局备案批准文号（第四格落印时落定，印落封栏） */
+    @TableField("approve_no")
+    @ApiModelProperty(value = "市局备案批准文号（第四格落印时落定，印落封栏）")
+    private String approveNo;
 
     /** 删除标记 0正常 1删除 */
     @TableField("del_flag")
@@ -147,6 +187,70 @@ public class TMarrCertBill implements Serializable {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public String getApplicantName() {
+        return applicantName;
+    }
+
+    public void setApplicantName(String applicantName) {
+        this.applicantName = applicantName;
+    }
+
+    public String getApplicantKind() {
+        return applicantKind;
+    }
+
+    public void setApplicantKind(String applicantKind) {
+        this.applicantKind = applicantKind;
+    }
+
+    public String getCredentialNo() {
+        return credentialNo;
+    }
+
+    public void setCredentialNo(String credentialNo) {
+        this.credentialNo = credentialNo;
+    }
+
+    public String getSiteNo() {
+        return siteNo;
+    }
+
+    public void setSiteNo(String siteNo) {
+        this.siteNo = siteNo;
+    }
+
+    public String getPurpose() {
+        return purpose;
+    }
+
+    public void setPurpose(String purpose) {
+        this.purpose = purpose;
+    }
+
+    public String getDraftText() {
+        return draftText;
+    }
+
+    public void setDraftText(String draftText) {
+        this.draftText = draftText;
+    }
+
+    public String getVolumeNo() {
+        return volumeNo;
+    }
+
+    public void setVolumeNo(String volumeNo) {
+        this.volumeNo = volumeNo;
+    }
+
+    public String getApproveNo() {
+        return approveNo;
+    }
+
+    public void setApproveNo(String approveNo) {
+        this.approveNo = approveNo;
     }
 
     public Integer getDelFlag() {
